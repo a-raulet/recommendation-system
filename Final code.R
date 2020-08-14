@@ -70,10 +70,10 @@ head(edx)
 summary(edx)
 
 edx %>% summarize(users = n_distinct(userId),
-                titles = n_distinct(title),
-                movid = n_distinct(movieId),
-                genres = n_distinct(genres),
-                mu = mean(edx$rating))
+                  titles = n_distinct(title),
+                  movid = n_distinct(movieId),
+                  genres = n_distinct(genres),
+                  mu = mean(edx$rating))
 
 ### Distribution of ratings among users #####
 
@@ -153,6 +153,20 @@ top_movies <- edx %>%
 
 top_df <- edx %>%
   filter(movieId %in% top_movies, userId %in% top_users)
+
+# Adjusting length of titles for better visualization
+
+pattern_year <- c(" \\(19\\d{2}\\)")
+pattern_sw <- ": Episode"
+pattern_sw2 <- "\\(a.k.a. Star Wars\\)"
+
+col_names <- str_remove(top_df$title, pattern_year)
+col_names <-str_remove(col_names, pattern_sw)
+col_names <- str_remove(col_names, pattern_sw2)
+
+top_df$title <- col_names
+
+# Creating matrix
 
 top_matrix <- top_df %>%
   select(userId, title, rating) %>%
