@@ -1,5 +1,5 @@
 ---
-title: "Final exam - Recommendation System"
+title: "HarvardX Capstone Project - Recommendation System"
 author: "Arnaud RAULET"
 date: "21/06/2020"
 output: pdf_document
@@ -7,13 +7,13 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+load("~/capstone-rec.RData")
 ```
 
-# Harvard Capstone Project - Movie Recommendation System
 
 ### Code provided for this Capstone Project
 
-```{r eval="hide"}
+```{r error=FALSE, warning=FALSE, message=FALSE}
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
 if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
@@ -58,7 +58,7 @@ rm(dl, ratings, movies, test_index, temp, movielens, removed)
 
 ### Before proceeding, please install and load the packages below :
 
-```{r eval=FALSE}
+```{r error=FALSE, warning=FALSE, message=FALSE}
 if(!require(dendextend)) install.packages("dendextend", repos = "http://cran.us.r-project.org")
 if(!require(polycor)) install.packages("polycor", repos = "http://cran.us.r-project.org")
 if(!require(psych)) install.packages("psych", repos = "http://cran.us.r-project.org")
@@ -76,7 +76,7 @@ if(!require(microbenchmark)) install.packages("microbenchmark", repos = "http://
 
 ## Introduction
 
-The goal of this capstone project is to build a movie recommendation system with a RMSE below 0.85, based on the MovieLens dataset. Such a big dataset presents different challenges. One of these is a physical problem, where memory allocation and the limitations of a computer can prevent us from trying different theories. I tried a lot and failed a lot. More precisely, my computer crashed a lot. We know that we cannot perform regression with the ```{r eval=FALSE}lm``` function because it will be too slow or, more probably, R will crash. So is it possible to build a better model than the one's proposed by Professor Irizarry with a fast computation time ? Is it possible to train a model without waiting hours and still get good results ?
+The goal of this capstone project is to build a movie recommendation system with a RMSE below 0.85, based on the MovieLens dataset. Such a big dataset presents different challenges. One of these is a physical problem, where memory allocation and the limitations of a computer can prevent us from trying different theories. I tried a lot and failed a lot. More precisely, my computer crashed a lot. We know that we cannot perform regression with the `lm` function because it will be too slow or, more probably, R will crash. So is it possible to build a better model than the one's proposed by Professor Irizarry with a fast computation time ? Is it possible to train a model without waiting hours and still get good results ?
 
 After reading the different reports of the Netflix winners, I found that matrix factorization and single value decomposition were a game changer and one of the most important techniques to build predictions. We'll discover later that it is indeed a very fast tool. Moreover, one of the authors of the report, Edwin Chen, says that it is possible to get a low RMSE with "just a few well-selected models". This last comment encouraged me to follow Pareto's rule in order to get 80% of the outcomes with 20% of the efforts.
 
@@ -96,7 +96,7 @@ str(edx)
 head(edx)
 ```
 
-The dataset is in a tidy format, and we have 6 variables : the rating column, which is the outcome we'll try to predict, and 5 features ('movieId' and 'title' are the same, but one is of class integer while the second is of class character). We also have more than 9 millions rows, and more precisely 9 millions and fifty-five ratings. By using the is.na() function, we know that we have no NAs.
+The dataset is in a tidy format, and we have 6 variables : the rating column, which is the outcome we'll try to predict, and 5 features (`movieId` and `title` are the same, but one is of class integer while the second is of class character). We also have more than 9 millions rows, and more precisely 9 millions and fifty-five ratings. By using the is.na() function, we know that we have no NAs.
 
 But this doesn't mean there is no sparsity in the data. Actually there is a lot of sparsity. Not every user votes for the same movies, nor do every movie is watched by every user. 
 
@@ -114,7 +114,7 @@ There are 69,878 users and more than ten thousands titles, so we should have mor
 
 ```{r}
 # Density of data is 1.2% : Nb of observations / (Nb of users * nb of movies).
-90000055 / (69878 * 10676)
+9000055 / (69878 * 10676)
 
 
 edx %>% group_by(userId) %>% summarize(n = n()) %>%
@@ -172,11 +172,11 @@ hist(edx$rating, main = "Rating distribution", xlab = "Ratings")
 
 ```
 
-We can relate this to the "genres" column. We all have our own preferences : some prefer western movies, some prefer sci-fi, comedy or romance, and others like maybe all theses genres all at once.
+We can relate this to the `genres` column. We all have our own preferences : some prefer western movies, some prefer sci-fi, comedy or romance, and others like maybe all theses genres all at once.
 
 So if we find groups of users that like the same kind of movies, it may be possible to predict what they will rate.
 
-Moreover, we can see there is a ```{r eval=FALSE} genres``` effect on the ratings with the plot below :
+Moreover, we can see there is a `genres` effect on the ratings with the plot below :
 
 ```{r}
 # Genres effect
@@ -192,13 +192,14 @@ edx %>% group_by(genres) %>%
   ggtitle("Genres effect")
 
 ```
+
 Can we find groups that could help us predicting ratings ? Let's try hierarchical clustering.
 
 ### Hierarchical clustering
 
 We will first take a very small subset so that results and plots can be readable and visualized. We need a more dense matrix to study correlations, so we will take a subset of most rated movies and most rating users.
 
-```{r}
+```{r eval=FALSE}
 # Creating a dense matrix
 
 top_users <- edx %>% 
@@ -218,10 +219,23 @@ top_movies <- edx %>%
 top_df <- edx %>%
   filter(movieId %in% top_movies, userId %in% top_users)
 
+# Adjusting length of titles for better visualization
+
+pattern_year <- c(" \\(19\\d{2}\\)")
+pattern_sw <- ": Episode"
+pattern_sw2 <- "\\(a.k.a. Star Wars\\)"
+
+col_names <- str_remove(top_df$title, pattern_year)
+col_names <-str_remove(col_names, pattern_sw)
+col_names <- str_remove(col_names, pattern_sw2)
+
+top_df$title <- col_names
+
+# Creating matrix
+
 top_matrix <- top_df %>%
   select(userId, title, rating) %>%
   spread(title, rating)
-
 ```
 
 We now have a less sparse matrix.
@@ -236,6 +250,7 @@ image(as.matrix(top_matrix[,-1]),
       col = "blue")
 
 ```
+
 We need to calculate the distance between the different observations, then we identify the resulting clusters.
 
 ```{r}
@@ -312,7 +327,7 @@ To get a deeper understanding of what's behind users' preferences and genres eff
 
 To conduct an EFA, we first need to construct a correlation matrix. We can do this with the following piece of code.
 
-```{r}
+```{r eval=FALSE}
 
 library(polycor)
 
@@ -358,23 +373,22 @@ new_matrix <- complete_edx$completeObs
 
 ```
 
-We are still exploring, so we will keep the ```{r eval=FALSE} top_matrix``` in the following analysis.
+We are still exploring, so we will keep the `top_matrix` in the following analysis.
 
 Let's see if we can get some useful insights.
 
-```{r}
+```{r error=FALSE, warning=FALSE}
 library(ggcorrplot)
 
 #Visualizing correlations
 ggcorrplot(polyc_top, hc.order = TRUE, type = "lower")
-
 ```
 
 As we saw in hierarchical clustering, *True Lies*'s distance was far from the other movies. Here it seems negatively correlated to other movies. It is the only comedy film among those blockbusters, and users in our subset may not like comedy that much.
 
 It is now time to extract the factors. Let's check how many factors we should retain with the following scree plot. Only eigen values above or equal to 1 should be retained.
 
-```{r, error=FALSE, warning=FALSE}
+```{r, error=FALSE, warning=FALSE, message=FALSE}
 
 # Scree plot
 scree(polyc_top)
@@ -383,7 +397,7 @@ scree(polyc_top)
 
 The plot suggests 7 factors in the subset. However if we do a parallel analysis, the result is different.
 
-```{r, error=FALSE, warning=FALSE}
+```{r, error=FALSE, warning=FALSE, message=FALSE}
 
 # Parallel analysis scree plot
 fa.parallel(polyc_top, n.obs = 20, fm="minres" , fa = "fa")
@@ -394,7 +408,7 @@ This time, it suggests 4 factors. (And warning messages.)
 
 We will extract 7 factors as suggested by the first plot and visualize these latent factors in a path diagram. Also, we will use an oblique rotation as users could like different kind of movies. An orthogonal rotation doesn't seem to be appropriate here.
 
-```{r, error=FALSE, warning=FALSE}
+```{r, error=FALSE, warning=FALSE, message=FALSE}
 library(GPArotation)
 
 # Factor analysis with 7 factors and oblique rotation
@@ -409,7 +423,7 @@ fa.diagram(f7_top_obli)
 
 ### Principal Component Analysis
 
-We will finish this data exploration with a PCA. We will use the ```{r eval=FALSE}FactoMineR``` library. This time, we will try with 4 dimensions.
+We will finish this data exploration with a PCA. We will use the `FactoMineR` library. This time, we will try with 4 dimensions.
 
 ```{r, error=FALSE, warning=FALSE}
 
@@ -427,7 +441,7 @@ If we look at the graph of individuals and compare it to the previous dendrogram
 
 We can get a different vision of the dimensions for each movie with the following code.
 
-```{r, error=FALSE, warning=FALSE}
+```{r, error=FALSE, warning=FALSE, message=FALSE}
 library(factoextra)
 
 # Dimensions plot by movie
@@ -440,22 +454,22 @@ Each user is at the same place, but their colors vary depending on their ratings
 
 (NOTA BENE : the grey dimension represents NAs.)
 
-## Building a model with Matrix Factorization : the Recosystem package
+## Building a model with Matrix Factorization : the Recosystem package  
 
 
-In linear algebra, a $m * n$ matrix can be factorized as the product of two matrices as long as the first one has the same number of columns $k$ as the number of rows of the second one.
+In linear algebra, a $m * n$ matrix can be factorized as the product of two matrices as long as the first one has the same number of columns $k$ as the number of rows of the second one.  
 
-                                        $R{m*n} = P{m*k} * Q{k*n}$
+$$R_{m*n} = P_{m*k} * Q_{k*n}$$  
 
-As we saw previously on the sparsity image, the dataset is filled with NAs when it is turned into a matrix containing ratings from users and for each movie. The 'Recosystem' package can help us predict those NAs based on observed values. Once we know the two above small matrices P and Q with their ratings, we can find the missing values for the $R$ matrix. Moreover, for each rating the algorithm takes into account penalty parameters (ie, regularization) to optimize the rating and to avoid overfitting.
+As we saw previously on the sparsity image, the dataset is filled with NAs when it is turned into a matrix containing ratings from users and for each movie. The 'Recosystem' package can help us predict those NAs based on observed values. Once we know the two above small matrices $P$ and $Q$ with their ratings, we can find the missing values for the $R$ matrix. Moreover, for each rating the algorithm takes into account penalty parameters (ie, regularization) to optimize the rating and to avoid overfitting.  
 
-This package is an R wrapper of the LIBMF library, which is a parallelized library that enables to speed up computation thanks to multicore CPUs. The 'recosystem' is aimed for fast matrix factorization using parallel stochastic gradient descent. Stochastic means "random", and there's a part of randomness in the process when choosing the gradient. The gradient is a point of the optimization function the algorithm tries to solve for regularization. You can imagine this function as a parabola, it starts from a random point of it, and goes down along the slope to reach its lowest value. The process is iterative, so the gradient gets lower and lower (gradient descent) until convergence if there is one. For each predicted rating, the lowest value will be added as regularization.
+This package is an R wrapper of the LIBMF library, which is a parallelized library that enables to speed up computation thanks to multicore CPUs. The 'recosystem' is aimed for fast matrix factorization using parallel stochastic gradient descent. Stochastic means "random", and there's a part of randomness in the process when choosing the gradient. The gradient is a point of the optimization function the algorithm tries to solve for regularization. You can imagine this function as a parabola, it starts from a random point of it, and goes down along the slope to reach its lowest value. The process is iterative, so the gradient gets lower and lower (gradient descent) until convergence if there is one. For each predicted rating, the lowest value will be added as regularization.  
 
-### Training the model
+### Training the model  
 
-First, we randomly order the dataset. This ensures that the training set and test set are both random samples and that any biases in the ordering of the dataset are not retained in the samples. If we look carefully at the ```{r eval=FALSE}edx``` dataset, it is ordered by ```{r eval=FALSE}userId```. So we will remove this bias.
+First, we randomly order the dataset. This ensures that the training set and test set are both random samples and that any biases in the ordering of the dataset are not retained in the samples. If we look carefully at the `edx` dataset, it is ordered by `userId`. So we will remove this bias.
 
-```{r}
+```{r eval=FALSE}
 # Randomly order the dataset
 
 set.seed(69, sample.kind = "Rounding")
@@ -467,7 +481,7 @@ random_edx <- edx[rows,]
 
 We then split the data into train and test sets : 80% for the train set and 20% for the test set.
 
-```{r}
+```{r eval=FALSE}
 
 #Splitting in train and test sets
 
@@ -480,9 +494,9 @@ test_set <- random_edx[-test_index,]
 
 ```
 
-Before training the model, we must convert the train and test sets in new "Recosytem" objects with the same three columns we used previously to build the sparse matrix, that is to say 'rating', 'userId' and 'movieId'. We do this with the following code :
+Before training the model, we must convert the train and test sets in new `Recosytem` objects with the same three columns we used previously to build the sparse matrix, that is to say `rating`, `userId` and `movieId`. We do this with the following code :
 
-```{r}
+```{r eval=FALSE}
 # Converting train and test sets in 'Recosystem' objects of class "DataSource"
 
 library(recosystem)
@@ -505,9 +519,10 @@ class(train_reco)
 
 We can then train the model and predict ratings with the following piece of code.
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 # Simple training model
-set.seed(69, sample.kind = "Rounding") # We must set seed because it's a randomized algorithm (ie, stochastic)
+set.seed(69, sample.kind = "Rounding") # We must set seed because 
+# it's a randomized algorithm (ie, stochastic).
 
 rec <- Reco()
 rec$train(train_data = train_reco, opts = c(verbose = FALSE))
@@ -522,9 +537,9 @@ RMSE(test_set$rating,test_pred)
 
 ```
 
-Our RMSE is 0.833 in just a few seconds. It is a pretty good result in a very short amount of time. We can calculate the processing time with the ```{r eval=FALSE}microbenchmark``` library and the following piece of code.
+Our RMSE is 0.833 in just a few seconds. It is a pretty good result in a very short amount of time. We can calculate the processing time with the `microbenchmark` library and the following piece of code.
 
-```{r}
+```{r eval=FALSE}
 
 library(microbenchmark)
 set.seed(69, sample.kind = "Rounding")
@@ -532,7 +547,8 @@ set.seed(69, sample.kind = "Rounding")
 computing_time <- microbenchmark(
   
   rec$train(train_data = train_reco),
-  times = 10 # We calculate this 10 times and we'll get a data frame of 10 different computing times
+  times = 10 # We calculate this 10 times and we'll get a data frame 
+  # of 10 different computing times.
 )
 ```
 
@@ -543,17 +559,19 @@ plot(computing_time)
 
 In general, it took less than one minute to reach a RMSE around 0.82. Can we do better ? When training the model, we used the default values of different parameters. Here is the list of the main parameters :
 
-* dim : it is the number of latent factors.
-* costp_l1 : this is L1 regularization parameter for user factors.
-* costp_l2 : this is L2 regularization parameter for user factors.
-* costq_l1 : this is L1 regularization parameter for item factors.
-* costq_l2 : this is L2 regularization parameter for item factors.
-* nfold : this is the number of folds in cross validation. The default value is 5.
-* lrate : it is the learning rate, which can be thought of as the step size in the gradient descent. If it's too high, we'll jump over the minima we try to reach.
-* niter : it is the number of iterations. As we said, it is an iterative process in which the algorithm learns at each iteration while the gradient goes down to the minimum cost.
-* nthread : it is the number of threads for parallel computing. We must be careful here because results may not be reproducible even if the seed is set when 'nthread' > 1. In order to keep constant results, we'll keep 'nthread' set to 1 for every test in this paper. It is indeed the default value.
-* nmf : it performs non-negative matrix factorization if it's set to TRUE. Ratings on our dataset are only positive, so we'll tune this parameter to TRUE later. Default value is FALSE.
-* verbose : show detailed information if it is TRUE (default value). We 'll use FALSE in the training process below.
+* `dim` : it is the number of latent factors.
+* `costp_l1` : this is L1 regularization parameter for user factors.
+* `costp_l2` : this is L2 regularization parameter for user factors.
+* `costq_l1` : this is L1 regularization parameter for item factors.
+* `costq_l2` : this is L2 regularization parameter for item factors.
+* `nfold` : this is the number of folds in cross validation. The default value is 5.
+* `lrate` : it is the learning rate, which can be thought of as the step size in the gradient descent. If it's too high, we'll jump over the minima we try to reach.
+* `niter` : it is the number of iterations. As we said, it is an iterative process in which the algorithm learns at each iteration while the gradient goes down to the minimum cost.
+* `nthread` : it is the number of threads for parallel computing. We must be careful here because results may not be reproducible even if the seed is set when `nthread` > 1. In order to keep constant results, we'll keep `nthread` set to 1 for every test in this paper. It is indeed the default value.
+* `nmf` : it performs non-negative matrix factorization if it's set to `TRUE`. Ratings on our dataset are only positive, so we'll tune this parameter to `TRUE` later. Default value is `FALSE`.
+* `verbose` : show detailed information if it is `TRUE` (default value). We 'll use `FALSE` in the training process below.
+
+(For more details about the `Recosystem` package or the optimization formula, please check the help file in RStudio or the links provided by the help page.)
 
 The default values of each parameter are as below :
 
@@ -573,11 +591,11 @@ rec$train(train_data = train_reco, opts = c(dim = 10,
 
 ```
 
-### Tuning parameters
+### Tuning parameters  
 
-The tuning of the parameters in the 'opts' list of parameters can be done with the following 'tune' option. However I did not succeed to run this code with the different values I wanted to try (R crashed), so we will tune the parameters with the default values of the 'tune' function.  It then returns the best values with the lowest RMSE with ```{r eval=FALSE} opt$min```. We will take the results of ```{r eval=FALSE} opt$min``` as a starting point to further tune each parameter. Tuning with the following code takes more time than the simple training we did above : around 2 hours with the default values. They are as follows :
+The tuning of the parameters in the `opts` list of parameters can be done with the following `tune` option. However I did not succeed to run this code with the different values I wanted to try (R crashed), so we will tune the parameters with the default values of the 'tune' function.  It then returns the best values with the lowest RMSE with `opt$min`. We will take the results of `opt$min` as a starting point to further tune each parameter. Tuning with the following code takes more time than the simple training we did above : around 2 hours with the default values. They are as follows :
 
-```{r}
+```{r eval=FALSE}
 
 set.seed(69, sample.kind = "Rounding")
 
@@ -601,18 +619,19 @@ opt$min
 
 ```
 
-When tuning parameters with the best values above, our RMSE is close to 0.805. Can we still make it better ? As explained before, ```{r eval=FALSE} rec$tune``` may crash your computer if you input too many values. So we'll take the best values, and tune a bit more each parameter with different values. Of course, this is not perfect. The ideal method is to use the 'tune' function that tries every possibility and every model with all the different values. That's why it takes so much time. Nevertheless, we'll try to do better bit by bit.
+When tuning parameters with the best values above, our RMSE is close to 0.805. Can we still make it better ? As explained before, `rec$tune` may crash your computer if you input too many values. So we'll take the best values, and tune a bit more each parameter with different values. Of course, this is not perfect. The ideal method is to use the `tune` function that tries every possibility and every model with all the different values. That's why it takes so much time. Nevertheless, we'll try to do better bit by bit.  
 
-Let's start with the ```{r eval=FALSE}dim``` parameter. As we saw in the data exploration, the number of latent factors behind users and movies seems to be an important parameter. We found 4, 6 or 7 factors depending on the anlysis. But it was for a very small subset of 20 movies and 20 users. Now we must train the whole dataset. According to the tuning results, 20 dimensions seem to give a better RMSE. We will try with more dimensions compared to the default values of the ```{r eval=FALSE} tune``` option.
+Let's start with the `dim` parameter. As we saw in the data exploration, the number of latent factors behind users and movies seems to be an important parameter. We found 4, 6 or 7 factors depending on the analysis. But it was for a very small subset of 20 movies and 20 users. Now we must train the whole dataset. According to the tuning results, 20 dimensions seem to give a better RMSE. We will try with more dimensions compared to the default values of the `tune` option.
 
-```{r}
+```{r eval=FALSE}
 # Tuning 'dim' parameter : (It takes around 50 minutes)
 
 d <- c(50, 100, 200, 300)
 
 dim_tune <- sapply(d, function(dim){
   rec$train(train_data = train_reco,opts = c(dim = dim,
-                                             costp_l2 = 0.01, # According to opt$min, this is the only best value that is not a default value
+                                             costp_l2 = 0.01, # According to opt$min, 
+# this is the only best value that is not a default value
                                              verbose = FALSE))
   
   test_pred <- rec$predict(test_reco,out_memory())
@@ -630,7 +649,7 @@ plot(dim_tune)
 
 We get better results with 200 dimensions. We will use it for the next parameter tuning. Let's try to tune a bit more the learning rate.
 
-```{r}
+```{r eval=FALSE}
 # Tuning learning rate 'lrate' : (Takes around 20 minutes)
 
 l <- c(0.1,0.2)
@@ -656,9 +675,9 @@ plot(learn_tune)
 
 Here we can clearly see that our RMSE gets higher with a higher learning rate. If learning rate is too high, we jump over the minimum cost we want to reach during the gradient descent. So we'll keep using the best value we obtained with the tune option, which was 0.1.
 
-What about the L1 P and Q costs ? The default values in the tune option were ```{r eval=FALSE} c(0, 0.1)```. The best value selected for both costs was 0, but maybe 0.1 was a bit high as a regularization cost. Let's try with ```{r eval=FALSE} c(0, 0.01)```.
+What about the L1 P and Q costs ? The default values in the tune option were ` c(0, 0.1)`. The best value selected for both costs was 0, but maybe 0.1 was a bit high as a regularization cost. Let's try with `c(0, 0.01)`.
 
-```{r}
+```{r eval=FALSE}
 # Tuning 'L1 p and q costs' :
 
 # P1 cost :
@@ -684,9 +703,9 @@ plot(cp1_tune)
 
 ```
 
-It seems that 0 is still the best value for ```{r eval=FALSE} costp_l1```. We get the same results for ```{r eval=FALSE} costq_l1```, so we won't show the code but the idea is the same. We keep 0 for both L1 costs.
+It seems that 0 is still the best value for `costp_l1`. We get the same results for `costq_l1`, so we won't show the code but the idea is the same. We keep 0 for both L1 costs.
 
-What about iteration ? The number of iterations in the tune option was just 20. As we said, this algorithm is iterative and learns during gradient descent. For my first tries, bigger values for iteration resulted in better RMSE results in general, but the training model was not as tuned as now. Actually, I tried values between 5 and 500 for this model, and the best RMSE was reached with just 20 iterations, the default value. Again, more doesn't mean better. 
+What about iteration ? The number of iterations in the tune option was just 20. As we said, this algorithm is iterative and learns during gradient descent. For my first tries, bigger values for iteration resulted in better RMSE results in general, but the training model was not as tuned as now. Actually, I tried values between 5 and 500 for this model, and the best RMSE was reached with just 20 iterations, the default value. Again, more doesn't mean better.
 
 To finish, we can add the 'non-negative matrix factorization' parameter in our model as our ratings are all positive values. We also set the folds for cross-validation to 10 instead of 5 (default value).
 
@@ -715,7 +734,7 @@ We can now predict results with the test set after training the model shown abov
 ```{r}
 # Predicting results on the test set :
 
-test_pred <- rec$predict(test_reco,out_memory())### Takes a few minutes
+test_pred <- rec$predict(test_reco, out_memory())### Takes a few minutes
 
 ```
 
@@ -780,11 +799,19 @@ test_set %>%
 
 ```
 
+
+### Model performance
+
+We tuned the model the best we could. The number of dimensions $k$ or `dim` in our model was one of the most important parameters that reduced RMSE from 0.833 to 0.786. But as we tuned every parameter we could, it seems that we have reached a limit with this model. To improve our results and get an even lower RMSE, we should train different models with other methods and create an ensemble with the best models created.
+
+However, we are close to our main objective, which is reaching a RMSE below 0.85. We will proceed to the final validation with this matrix factorization model.
+
+
 ### Final Validation
 
 It is now time to get the final predictions on the validation set and the final RMSE for this Capstone project.
 
-```{r}
+```{r eval=FALSE}
 # Converting the 'validation' set in 'Recosystem' object
 
 valid_reco <- with(validation, data_memory(user_index = userId,
@@ -806,16 +833,14 @@ RMSE(validation$rating, valid_pred)
 
 ```
 
-## Conclusion
+## Conclusion  
 
-Our final RMSE on the validation set is 0.7869, below the 0.85 target. Matrix factorization enabled us to do better, and faster. With just one model, we were able to get a low RMSE in just a few minutes. Edwin Chen's statement is true, and we can get good results with just a few models if they're well selected. Less is more.
+Our final RMSE on the validation set is 0.7869, below the 0.85 target. Matrix factorization enabled us to do better, and faster. With just one model, we were able to get a low RMSE in just a few minutes. Edwin Chen's statement is true, and we can get good results with just a few models if they're well selected. Less is more.  
 
-During Data Exploration, we found latent factors, and thus the number of $k$ for matrix factorization during tuning. Of course, there are still improvements to do. We did not construct a linear model with all the different variables, like ```{r eval=FALSE}genres``` or ```{r eval=FALSE}timestamp```. There are also other calculation methods like AdaGrad, which adapts the learning rate according to the sparsity of each parameter. It increases for sparser parameters, and decreases with less sparse ones.
+During Data Exploration, we found latent factors, and thus the number of $k$ for matrix factorization during tuning. Of course, there are still improvements to do. We did not construct a linear model with all the different variables, like `genres` or `timestamp`. There are also other calculation methods in matrix factorization like AdaGrad, which adapts the learning rate according to the sparsity of each parameter. It increases for sparser parameters, and decreases with less sparse ones.  
 
-During my research, I was very interested in parallel computing and packages like ```{r eval=FALSE}H2O``` and ```{r eval=FALSE}SparklyR``` to increase computation speed. It is possible to train algorithms with ```{r eval=FALSE}H2O``` very quickly, whereas ```{r eval=FALSE}SparklyR``` was low and setting a good configuration was a bit hard. But it has a lot of algorithms, more than ```{r eval=FALSE}H2O```, and these packages can be really useful for large datasets like the Movielens dataset we used for this project.
+During my research, I was very interested in parallel computing and packages like `H2O` and `SparklyR` to increase computation speed. It is possible to train algorithms with `H2O` very quickly, whereas `SparklyR` was low and setting a good configuration was a bit hard. But it has a lot of algorithms, more than `H2O`, and these packages can be really useful for large datasets like the Movielens dataset we used for this project.  
 
-The ```{r eval=FALSE}recommenderlab``` offers also a solution for matrix factorization and has many tools to build a recommendation system and to suggest movies to users.
+The `recommenderlab` offers also a solution for matrix factorization and has many tools to build a recommendation system and to suggest movies to users.
 
-We focused on one method in this paper that gives good results.
-
-Less is more, but there is still a lot of work to do in order to build a better model and a lower RMSE.
+We focused on one method in this paper that gives good results. Less is more, but there is still a lot of work to do in order to build a better model and a lower RMSE.
